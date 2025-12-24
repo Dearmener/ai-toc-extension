@@ -332,6 +332,9 @@
 
       if (!el.id) el.id = `toc-${generateId(text)}-${index}`;
 
+      // Set scroll margin to ensure it lands inside the observer's window (and clears fixed headers)
+      el.style.scrollMarginTop = '80px'; 
+
       const li = document.createElement('li');
       const tagType = el.tagName.toLowerCase();
       let levelClass = `toc-${tagType}`;
@@ -345,7 +348,9 @@
       
       a.onclick = (e) => {
         e.preventDefault();
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Use 'start' alignment so the element is at top (offset by scrollMarginTop)
+        // This matches the top-biased observer window
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
       };
 
       li.appendChild(a);
@@ -363,7 +368,12 @@
 
     const options = {
       root: null,
-      rootMargin: '-10% 0px -80% 0px',
+      // Adjusted rootMargin to better detect elements near the top of the viewport
+      // -60px top: Detection starts 60px down (approx header height)
+      // -70% bottom: Detection ends at 30% of viewport height
+      // Result: A window from 60px to ~300px (on 1080p).
+      // Since we scroll to 80px (via scrollMarginTop), the target lands safely in this window.
+      rootMargin: '-60px 0px -70% 0px',
       threshold: 0
     };
 
