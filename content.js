@@ -41,6 +41,8 @@
     const sidebar = document.createElement('div');
     sidebar.id = CONFIG.containerId;
     sidebar.innerHTML = `
+      <div class="toc-resizer-left" title="调整宽度"></div>
+      <div class="toc-resizer-bottom" title="调整高度"></div>
       <div class="toc-header">
         <span class="toc-title">目录</span>
         <div class="toc-actions">
@@ -54,15 +56,18 @@
 
     document.body.appendChild(sidebar);
 
-    // Initialize Position
-    restorePosition(sidebar);
+    // Initialize Position & Size
+    restoreState(sidebar);
 
     // Event Listeners
     const toggleBtn = sidebar.querySelector('.toc-toggle');
     if (toggleBtn) toggleBtn.addEventListener('click', toggleSidebar);
     
-    // Enable Dragging
+    // Enable Dragging (Move)
     makeDraggable(sidebar);
+    
+    // Enable Resizing
+    makeResizable(sidebar);
 
     // Initial Scan
     scanHeaders();
@@ -75,46 +80,61 @@
     sidebar.classList.toggle('collapsed', !isExpanded);
   }
 
-  // --- Position Persistence ---
+  // --- Persistence (Position & Size) ---
 
-  function restorePosition(sidebar) {
+  function restoreState(sidebar) {
     const saved = localStorage.getItem(CONFIG.storageKey);
-    let hasSavedPos = false;
+    let hasSavedState = false;
 
     if (saved) {
       try {
-        const pos = JSON.parse(saved);
-        // Safety check: ensure it's somewhat on screen
+        const state = JSON.parse(saved);
+        
+        // Restore Position
         const maxX = window.innerWidth - 50;
         const maxY = window.innerHeight - 50;
         
-        let left = Math.min(Math.max(0, pos.left), maxX);
-        let top = Math.min(Math.max(0, pos.top), maxY);
+        let left = Math.min(Math.max(0, state.left), maxX);
+        let top = Math.min(Math.max(0, state.top), maxY);
 
         sidebar.style.left = left + 'px';
         sidebar.style.top = top + 'px';
-        sidebar.style.right = 'auto'; // Clear default
-        hasSavedPos = true;
+        sidebar.style.right = 'auto'; 
+
+        // Restore Width
+        if (state.width) {
+          sidebar.style.width = Math.max(200, Math.min(800, state.width)) + 'px';
+        }
+
+        // Restore Height
+        if (state.height) {
+          sidebar.style.height = Math.max(100, Math.min(window.innerHeight - 20, state.height)) + 'px';
+        }
+
+        hasSavedState = true;
       } catch (e) {
-        console.error('AI TOC: Failed to restore position', e);
+        console.error('AI TOC: Failed to restore state', e);
       }
     }
 
-    if (!hasSavedPos) {
+    if (!hasSavedState) {
       // Default: Top Right
       sidebar.style.top = '80px';
-      sidebar.style.right = '20px';
-      sidebar.style.left = 'auto';
+      sidebar.style.right = '20px'; 
+      sidebar.style.left = 'auto';  
+      // Height defaults to auto or CSS max-height logic initially
     }
   }
 
-  function savePosition(sidebar) {
+  function saveState(sidebar) {
     const rect = sidebar.getBoundingClientRect();
-    const pos = {
+    const state = {
       left: rect.left,
-      top: rect.top
+      top: rect.top,
+      width: rect.width,
+      height: rect.height
     };
-    localStorage.setItem(CONFIG.storageKey, JSON.stringify(pos));
+    localStorage.setItem(CONFIG.storageKey, JSON.stringify(state));
   }
 
   // --- Keep Alive / Watchdog ---
@@ -122,13 +142,12 @@
     setInterval(() => {
        const sidebar = document.getElementById(CONFIG.containerId);
        if (!sidebar) {
-         // It was removed by the host app, put it back
          createSidebar();
        }
     }, 1500); 
   }
 
-  // --- Drag Logic ---
+  // --- Drag Logic (Move) ---
 
   function makeDraggable(elmnt) {
     let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
@@ -139,7 +158,10 @@
     }
 
     function dragMouseDown(e) {
+      // Don't drag if clicking buttons
       if (e.target.tagName === 'BUTTON') return;
+      // Don't drag if close to edges (resizer areas)
+      if (e.offsetX < 15 || e.offsetY > (header.offsetHeight - 5)) return;
 
       e.preventDefault();
       
@@ -167,13 +189,66 @@
       document.onmouseup = null;
       document.onmousemove = null;
       elmnt.classList.remove('dragging');
-      
-      // Save new position
-      savePosition(elmnt);
+      saveState(elmnt);
     }
   }
 
-  // --- Logic ---
+  // --- Resize Logic ---
+
+  function makeResizable(sidebar) {
+    const resizerL = sidebar.querySelector('.toc-resizer-left');
+    const resizerB = sidebar.querySelector('.toc-resizer-bottom');
+    
+    let currentDir = '';
+
+    if (resizerL) resizerL.addEventListener('mousedown', (e) => initResize(e, 'left'));
+    if (resizerB) resizerB.addEventListener('mousedown', (e) => initResize(e, 'bottom'));
+
+    function initResize(e, direction) {
+      e.preventDefault();
+      currentDir = direction;
+      window.addEventListener('mousemove', resize);
+      window.addEventListener('mouseup', stopResize);
+      sidebar.classList.add('resizing');
+      
+      const cursor = direction === 'left' ? 'col-resize' : 'row-resize';
+      document.body.style.cursor = cursor;
+    }
+
+    function resize(e) {
+      const rect = sidebar.getBoundingClientRect();
+      
+      if (currentDir === 'left') {
+        // Width Logic (Anchored Right)
+        let newWidth = rect.right - e.clientX;
+        if (newWidth < 200) newWidth = 200;
+        if (newWidth > 800) newWidth = 800;
+
+        const newLeft = rect.right - newWidth;
+        sidebar.style.width = `${newWidth}px`;
+        sidebar.style.left = `${newLeft}px`;
+        sidebar.style.right = 'auto';
+      } 
+      else if (currentDir === 'bottom') {
+        // Height Logic (Anchored Top)
+        let newHeight = e.clientY - rect.top;
+        if (newHeight < 100) newHeight = 100;
+        if (newHeight > window.innerHeight - 20) newHeight = window.innerHeight - 20;
+
+        sidebar.style.height = `${newHeight}px`;
+      }
+    }
+
+    function stopResize() {
+      window.removeEventListener('mousemove', resize);
+      window.removeEventListener('mouseup', stopResize);
+      sidebar.classList.remove('resizing');
+      document.body.style.cursor = 'default';
+      saveState(sidebar);
+    }
+  }
+
+  // --- Header Scanning Logic ---
 
   function generateId(text) {
     return text.toLowerCase().replace(/[^\w\u4e00-\u9fa5]+/g, '-').replace(/^-+|-+$/g, '');
@@ -325,7 +400,6 @@
   createSidebar();
   startKeepAlive();
 
-  // Scan headers periodically in case of new messages
   const mutationObserver = new MutationObserver((mutations) => {
     if (window.tocTimeout) clearTimeout(window.tocTimeout);
     window.tocTimeout = setTimeout(() => {

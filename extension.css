@@ -3,8 +3,10 @@
 #ai-toc-sidebar-root {
   position: fixed !important;
   /* Top/Left are managed by JS */
-  width: 260px !important;
-  max-height: 70vh !important;
+  width: 260px !important; /* Default, overridden by JS */
+  min-width: 200px !important;
+  max-width: 800px !important;
+  max-height: 90vh !important; /* Increased to allow height resizing */
   background: rgba(15, 15, 18, 0.95) !important;
   backdrop-filter: blur(12px) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
@@ -15,27 +17,93 @@
   box-shadow: 0 12px 30px rgba(0,0,0,0.5) !important;
   display: flex !important;
   flex-direction: column !important;
-  /* Include 'left' in transition for smooth docking animation */
-  transition: opacity 0.2s ease, width 0.2s ease, left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  /* Include 'left', 'width', 'height' in transition for smooth docking animation, 
+     but NOT when resizing (handled by specific class) */
+  transition: opacity 0.2s ease; 
   visibility: visible !important;
   opacity: 1 !important;
   pointer-events: auto !important;
 }
 
-/* Disable transition when dragging to prevent lag */
-#ai-toc-sidebar-root.dragging {
+/* Disable transition when moving or resizing to prevent lag */
+#ai-toc-sidebar-root.dragging,
+#ai-toc-sidebar-root.resizing {
   box-shadow: 0 15px 40px rgba(0,0,0,0.7) !important;
-  border-color: rgba(99, 102, 241, 0.5) !important; /* Indigo tint when dragging */
-  cursor: move !important;
+  border-color: rgba(99, 102, 241, 0.5) !important; /* Indigo tint */
   transition: none !important; /* Instant movement */
+  user-select: none !important;
 }
 
+#ai-toc-sidebar-root.dragging {
+  cursor: move !important;
+}
+
+/* --- Resizer Handles --- */
+
+/* Left Handle (Width) */
+.toc-resizer-left {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 10px !important; /* Touch area */
+  cursor: col-resize !important;
+  z-index: 10 !important;
+  background: transparent !important;
+}
+
+/* Bottom Handle (Height) */
+.toc-resizer-bottom {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  height: 10px !important; /* Touch area */
+  cursor: row-resize !important;
+  z-index: 10 !important;
+  background: transparent !important;
+}
+
+/* Visual hint on hover (Left) */
+.toc-resizer-left:hover::after,
+#ai-toc-sidebar-root.resizing .toc-resizer-left::after {
+  content: '' !important;
+  position: absolute !important;
+  left: 4px !important;
+  top: 12px !important;
+  bottom: 12px !important;
+  width: 2px !important;
+  background: rgba(99, 102, 241, 0.6) !important; /* Indigo bar */
+  border-radius: 2px !important;
+}
+
+/* Visual hint on hover (Bottom) */
+.toc-resizer-bottom:hover::after,
+#ai-toc-sidebar-root.resizing .toc-resizer-bottom::after {
+  content: '' !important;
+  position: absolute !important;
+  bottom: 4px !important;
+  left: 12px !important;
+  right: 12px !important;
+  height: 2px !important;
+  background: rgba(99, 102, 241, 0.6) !important; /* Indigo bar */
+  border-radius: 2px !important;
+}
+
+/* --- Collapsed State --- */
 #ai-toc-sidebar-root.collapsed {
   width: 36px !important;
+  min-width: 36px !important;
   height: 36px !important;
   overflow: hidden !important;
   border-radius: 8px !important;
   background: rgba(30, 30, 35, 0.9) !important;
+}
+
+/* Hide resizers when collapsed */
+#ai-toc-sidebar-root.collapsed .toc-resizer-left,
+#ai-toc-sidebar-root.collapsed .toc-resizer-bottom {
+  display: none !important;
 }
 
 #ai-toc-sidebar-root.collapsed .toc-body,
@@ -60,6 +128,7 @@
 /* Header */
 .toc-header {
   padding: 12px 16px !important;
+  padding-left: 20px !important; /* Make room for left resizer */
   background: rgba(255, 255, 255, 0.03) !important;
   border-bottom: 1px solid rgba(255,255,255,0.05) !important;
   display: flex !important;
@@ -101,6 +170,8 @@
   overflow-y: auto !important;
   padding: 8px 0 !important;
   flex: 1 !important;
+  /* Ensure padding at bottom for resize handle */
+  padding-bottom: 12px !important; 
 }
 
 .toc-body::-webkit-scrollbar {
