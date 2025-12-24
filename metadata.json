@@ -1,0 +1,5 @@
+{
+  "name": "AI TOC Reader",
+  "description": "A Markdown viewer optimized for reading long AI conversations with a dynamic, auto-generated Table of Contents.",
+  "requestFramePermissions": []
+}

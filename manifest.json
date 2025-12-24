@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "AI 目录助手 (AI TOC Sidebar)",
+  "version": "1.1",
+  "description": "为 ChatGPT 和 Gemini 等对话页面添加悬浮目录侧边栏。",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://gemini.google.com/*",
+        "https://*.plusai.io/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "extension.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": []
+}
