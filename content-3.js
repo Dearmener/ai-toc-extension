@@ -15,7 +15,6 @@
       'main h1', 'main h2', 'main h3'
     ],
     containerId: 'ai-toc-sidebar-root',
-    storageKey: 'ai_toc_sidebar_position', // Key for localStorage
     chatContentSelector: `
       .markdown, 
       .message-content, 
@@ -30,12 +29,12 @@
     `
   };
 
+  let activeHeaderId = null;
   let isExpanded = true;
 
   // --- HTML Generation ---
 
   function createSidebar() {
-    // If it exists, don't create
     if (document.getElementById(CONFIG.containerId)) return;
 
     const sidebar = document.createElement('div');
@@ -54,12 +53,12 @@
 
     document.body.appendChild(sidebar);
 
-    // Initialize Position
-    restorePosition(sidebar);
+    // Initial Position (Fixed default, but overridable by drag)
+    sidebar.style.top = '80px';
+    sidebar.style.right = '20px';
 
     // Event Listeners
-    const toggleBtn = sidebar.querySelector('.toc-toggle');
-    if (toggleBtn) toggleBtn.addEventListener('click', toggleSidebar);
+    sidebar.querySelector('.toc-toggle').addEventListener('click', toggleSidebar);
     
     // Enable Dragging
     makeDraggable(sidebar);
@@ -70,62 +69,8 @@
 
   function toggleSidebar() {
     const sidebar = document.getElementById(CONFIG.containerId);
-    if (!sidebar) return;
     isExpanded = !isExpanded;
     sidebar.classList.toggle('collapsed', !isExpanded);
-  }
-
-  // --- Position Persistence ---
-
-  function restorePosition(sidebar) {
-    const saved = localStorage.getItem(CONFIG.storageKey);
-    let hasSavedPos = false;
-
-    if (saved) {
-      try {
-        const pos = JSON.parse(saved);
-        // Safety check: ensure it's somewhat on screen
-        const maxX = window.innerWidth - 50;
-        const maxY = window.innerHeight - 50;
-        
-        let left = Math.min(Math.max(0, pos.left), maxX);
-        let top = Math.min(Math.max(0, pos.top), maxY);
-
-        sidebar.style.left = left + 'px';
-        sidebar.style.top = top + 'px';
-        sidebar.style.right = 'auto'; // Clear default
-        hasSavedPos = true;
-      } catch (e) {
-        console.error('AI TOC: Failed to restore position', e);
-      }
-    }
-
-    if (!hasSavedPos) {
-      // Default: Top Right
-      sidebar.style.top = '80px';
-      sidebar.style.right = '20px';
-      sidebar.style.left = 'auto';
-    }
-  }
-
-  function savePosition(sidebar) {
-    const rect = sidebar.getBoundingClientRect();
-    const pos = {
-      left: rect.left,
-      top: rect.top
-    };
-    localStorage.setItem(CONFIG.storageKey, JSON.stringify(pos));
-  }
-
-  // --- Keep Alive / Watchdog ---
-  function startKeepAlive() {
-    setInterval(() => {
-       const sidebar = document.getElementById(CONFIG.containerId);
-       if (!sidebar) {
-         // It was removed by the host app, put it back
-         createSidebar();
-       }
-    }, 1500); 
   }
 
   // --- Drag Logic ---
@@ -139,37 +84,41 @@
     }
 
     function dragMouseDown(e) {
+      // Don't drag if clicking buttons inside the header
       if (e.target.tagName === 'BUTTON') return;
 
       e.preventDefault();
-      
+      // get the mouse cursor position at startup:
       pos3 = e.clientX;
       pos4 = e.clientY;
       document.onmouseup = closeDragElement;
+      // call a function whenever the cursor moves:
       document.onmousemove = elementDrag;
       
+      // Add dragging class for visual feedback
       elmnt.classList.add('dragging');
     }
 
     function elementDrag(e) {
       e.preventDefault();
+      // calculate the new cursor position:
       pos1 = pos3 - e.clientX;
       pos2 = pos4 - e.clientY;
       pos3 = e.clientX;
       pos4 = e.clientY;
 
+      // set the element's new position:
+      // We explicitly unset 'right' so 'left' takes precedence during drag
+      elmnt.style.right = 'auto'; 
       elmnt.style.top = (elmnt.offsetTop - pos2) + "px";
       elmnt.style.left = (elmnt.offsetLeft - pos1) + "px";
-      elmnt.style.right = 'auto'; 
     }
 
     function closeDragElement() {
+      // stop moving when mouse button is released:
       document.onmouseup = null;
       document.onmousemove = null;
       elmnt.classList.remove('dragging');
-      
-      // Save new position
-      savePosition(elmnt);
     }
   }
 
@@ -180,12 +129,12 @@
   }
 
   function isHeaderLike(element) {
+    // Filter out "bold" text that isn't acting like a header
     if (element.tagName === 'STRONG') {
       const text = element.innerText.trim();
       if (text.length > 80) return false;
       if (text.length < 2) return false;
       if (/^(Note:|Warning:|Tip:|注意：|提示：|警告：)/i.test(text)) return false;
-      if (/^(\d{1,2}:\d{2})/.test(text)) return false; 
 
       const parent = element.parentElement;
       if (parent) {
@@ -226,6 +175,7 @@
       headers.forEach(h => allHeaders.push(h));
     });
 
+    // Deduplicate and filter
     const uniqueHeaders = [];
     const seenMap = new Set();
     
@@ -240,7 +190,6 @@
     });
 
     if (list.childElementCount === uniqueHeaders.length && uniqueHeaders.length > 0) {
-       observeScroll(uniqueHeaders);
        return; 
     }
 
@@ -259,6 +208,7 @@
 
       const li = document.createElement('li');
       const tagType = el.tagName.toLowerCase();
+      // Treat strong as h2 or h3 depending on context, defaulting to h2-like for visibility
       let levelClass = `toc-${tagType}`;
       if (tagType === 'strong') levelClass = 'toc-strong';
 
@@ -266,6 +216,7 @@
       
       const a = document.createElement('a');
       a.href = `#${el.id}`;
+      // Add indentation visual cue
       a.innerHTML = `<span class="toc-text">${text}</span>`;
       
       a.onclick = (e) => {
@@ -307,8 +258,7 @@
     if (activeId === id) return;
     activeId = id;
     
-    const links = document.querySelectorAll('.toc-item a');
-    links.forEach(a => {
+    document.querySelectorAll('.toc-item a').forEach(a => {
       const parent = a.parentElement;
       if (a.getAttribute('href') === `#${id}`) {
         parent.classList.add('active');
@@ -320,12 +270,10 @@
   }
   let activeId = null;
 
-  // --- Boot ---
+  // --- Initialization ---
 
   createSidebar();
-  startKeepAlive();
 
-  // Scan headers periodically in case of new messages
   const mutationObserver = new MutationObserver((mutations) => {
     if (window.tocTimeout) clearTimeout(window.tocTimeout);
     window.tocTimeout = setTimeout(() => {
