@@ -30,7 +30,7 @@
 git克隆或下载本仓库代码到本地电脑。
 1. 克隆仓库：
 ```bash
-   git clone https://github.com/yourusername/ai-toc-extension.git
+https://github.com/Dearmener/ai-toc-extension.git```
 ```
 2. 或者下载 ZIP 文件并解压到一个文件夹（例如 `ai-toc-extension`）。
 
